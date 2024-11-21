@@ -1,7 +1,7 @@
 use sqlx::{Error, Pool, Postgres};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use bcrypt::verify;
+use bcrypt::{hash, verify, DEFAULT_COST};
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -635,6 +635,66 @@ pub async fn auth_user(
 pub struct GetUserDto {
     pub username: String,
 }
+
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdatePasswordDto {
+    pub username: String,
+    pub new_password: String,
+}
+
+pub async fn update_password(
+    pool: &Pool<Postgres>,
+    args: String, // JSON input as a string
+) -> Result<String, Error> {
+    // Parse input JSON
+    let input: UpdatePasswordDto = serde_json::from_str(&args).map_err(|err| {
+        eprintln!("Failed to parse input JSON: {:?}", err);
+        Error::Decode(Box::new(err))
+    })?;
+
+    // Check if the username exists
+    let user_exists = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM users WHERE username = $1
+        ) AS "exists!"
+        "#,
+        input.username
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if !user_exists {
+        return Err(Error::Decode(Box::new(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Username does not exist.",
+        ))));
+    }
+
+    // Hash the new password
+    let hashed_password = hash(&input.new_password, DEFAULT_COST).map_err(|err| {
+        eprintln!("Failed to hash password: {:?}", err);
+        Error::Decode(Box::new(err))
+    })?;
+
+    // Update the user's password
+    sqlx::query!(
+        r#"
+        UPDATE users
+        SET password = $1
+        WHERE username = $2
+        "#,
+        hashed_password,
+        input.username
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(format!("Password for user '{}' updated successfully.", input.username))
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserResponse {

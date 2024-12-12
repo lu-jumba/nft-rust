@@ -354,7 +354,9 @@ pub async fn file_claim(
     })?;
 
     // Check if the contract exists
-    let contract = sqlx::query_as!(
+    contract = claim.Contract(pool);
+
+    /*let contract = sqlx::query_as!(
         Contract,
         r#"
         SELECT id, username, claim_index
@@ -364,7 +366,7 @@ pub async fn file_claim(
         dto.contract_uuid
     )
     .fetch_optional(pool)
-    .await?;
+    .await?;*/
 
     let mut contract = match contract {
         Some(c) => c,
@@ -508,8 +510,22 @@ pub async fn process_claim(
                 ))));
             }
 
+            //get the contract
+            //let contract = fetch_contract(pool, claim.contract_uuid).await?;
+            contract = claim.Contract(pool);
+
+            let mut contract = match contract {
+                Some(c) => c,
+                None => {
+                    eprintln!("Contract with UUID {} not found.", dto.contract_uuid);
+                    return Err(Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Contract could not be found.",
+                    ))));
+                }
+            };
+
             // Create a repair order
-            let contract = fetch_contract(pool, claim.contract_uuid).await?;
             let repair_order = RepairOrder {
                 claim_uuid: claim.id,
                 contract_uuid: claim.contract_uuid,
@@ -574,7 +590,7 @@ pub async fn process_claim(
     Ok(())
 }
 
-// Fetch a contract by ID
+/*// Fetch a contract by ID
 async fn fetch_contract(pool: &Pool<Postgres>, contract_uuid: Uuid) -> Result<Contract, Error> {
     sqlx::query_as!(
         Contract,
@@ -587,7 +603,7 @@ async fn fetch_contract(pool: &Pool<Postgres>, contract_uuid: Uuid) -> Result<Co
     )
     .fetch_one(pool)
     .await
-}
+}*/
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthUserDto {
@@ -630,13 +646,6 @@ pub async fn auth_user(
         Error::Decode(Box::new(err))
     })
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GetUserDto {
-    pub username: String,
-}
-
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdatePasswordDto {
@@ -695,6 +704,47 @@ pub async fn update_password(
     Ok(format!("Password for user '{}' updated successfully.", input.username))
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AuthMagicDto {
+    pub username: String,
+    //pub password: String,
+}
+
+pub async fn auth_magic(
+    pool: &Pool<Postgres>,
+    args: String, // JSON input as a string
+) -> Result<String, Error> {
+    // Parse input JSON
+    let input: AuthMagicDto = serde_json::from_str(&args).map_err(|err| {
+        eprintln!("Failed to parse input JSON: {:?}", err);
+        Error::Decode(Box::new(err))
+    })?;
+
+    // Fetch the user from the database
+    let user = sqlx::query_as!(
+        User,
+        r#"
+        SELECT username, password, first_name, last_name
+        FROM users
+        WHERE username = $1
+        "#,
+        input.username
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // Authenticate the user
+    let authenticated = match user {
+        Some(user) => verify(&input.username, &user.username).unwrap_or(false), 
+        None => false,
+    };
+
+    // Serialize the result into JSON
+    serde_json::to_string(&authenticated).map_err(|err| {
+        eprintln!("Failed to serialize authentication result: {:?}", err);
+        Error::Decode(Box::new(err))
+    })
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserResponse {

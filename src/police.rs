@@ -32,20 +32,32 @@ pub async fn list_theft_claims(pool: &Pool<Postgres>) -> Result<String, Error> {
 
     for claim in claims {
         // Fetch the associated contract
-        let contract = sqlx::query_as!(
-            Contract,
-            r#"
-            SELECT id, username, item
-            FROM contracts
-            WHERE id = $1
-            "#,
-            claim.contract_uuid
-        )
-        .fetch_one(pool)
-        .await?;
+        //get the contract
+        contract = claim.Contract(pool);
+        let mut contract = match contract {
+            Some(c) => c,
+            None => {
+                eprintln!("Contract with UUID {} not found.", claim.contract_uuid);
+                return Err(Error::Decode(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Contract could not be found.",
+                ))));
+            }
+        };
 
         // Fetch the associated user
-        let user = sqlx::query_as!(
+        user = contract.User(pool);
+        let mut user = match user {
+            Some(u) => u,
+            None => {
+                eprintln!("User not found.");
+                return Err(Error::Decode(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "User could not be found.",
+                ))));
+            }
+        };
+       /* let user = sqlx::query_as!(
             User,
             r#"
             SELECT username, first_name, last_name
@@ -55,7 +67,7 @@ pub async fn list_theft_claims(pool: &Pool<Postgres>) -> Result<String, Error> {
             contract.username
         )
         .fetch_one(pool)
-        .await?;
+        .await?;*/
 
         // Construct the result
         results.push(TheftClaimResult {

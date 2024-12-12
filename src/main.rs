@@ -10,6 +10,7 @@ mod data;
 mod shop;
 mod insurance;
 mod repairs; // Assume all the previously implemented functions are in this module
+mod police
 
 // Define the structure of incoming requests
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +32,8 @@ bc_functions.insert("claim_ls", handlers::list_claims);
 bc_functions.insert("claim_file", handlers::file_claim);
 bc_functions.insert("claim_process", handlers::process_claim);
 bc_functions.insert("user_authenticate", handlers::auth_user);
+bc_functions.insert("password_update", handlers::update_password);
+bc_functions.insert("magic_authenticate", handlers::auth_magic);
 bc_functions.insert("user_get_info", handlers::get_user);
 
 // Shop Peer

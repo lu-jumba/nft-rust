@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RepairOrderResult {
-    //pub uuid: String,
+    pub uuid: String,
     pub claim_uuid: String,
     pub contract_uuid: String,
     pub item: Item,
@@ -30,7 +30,7 @@ pub async fn list_repair_orders(pool: &Pool<Postgres>) -> Result<String, Error> 
     let results: Vec<RepairOrderResult> = repair_orders
         .into_iter()
         .map(|order| RepairOrderResult {
-            //uuid: order.id.to_string(),
+            uuid: order.id.to_string(),
             claim_uuid: order.claim_id.to_string(),
             contract_uuid: order.contract_id.to_string(),
             item: serde_json::from_value(order.item).unwrap(), // Deserialize JSON item
@@ -103,7 +103,7 @@ pub async fn complete_repair_order(
         FROM claims
         WHERE id = $1 AND contract_uuid = $2
         "#,
-        repair_order.claim_uuid
+        repair_order.claim_uuid,
         repair_order.contract_uuid
     )
     .fetch_optional(pool)
@@ -118,7 +118,7 @@ pub async fn complete_repair_order(
             SET repaired = TRUE
             WHERE id = $1 AND contract_uuid = $2
             "#,
-            repair_order.claim_uuid
+            repair_order.claim_uuid,
             repair_order.contract_uuid
         )
         .execute(pool)

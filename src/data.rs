@@ -108,7 +108,7 @@ pub struct RepairOrder {
 }
 
 impl User {
-    pub async fn contacts(&self, pool: &Pool<Postgres>) -> Result<Vec<Contract>, sqlx::Error> {
+    pub async fn contracts(&self, pool: &Pool<Postgres>) -> Result<Vec<Contract>, sqlx::Error> {
         let mut contracts = Vec::new();
 
         for contract_id in &self.contract_index {
@@ -150,7 +150,7 @@ impl User {
 }
 
 //Ensure the claim_id column in the claim table is indexed for efficient lookups:
-//CREATE INDEX idx_cclaims_claim_id ON claims (claim_id);
+//CREATE INDEX idx_claims_claim_id ON claims (claim_id);
 impl Contract {
     pub async fn claims(&self, pool: &Pool<Postgres>) -> Result<Vec<Claim>, Error> {
         let mut claims = Vec::new();

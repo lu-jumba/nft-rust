@@ -1,7 +1,7 @@
 use actix_web::{web, App, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Pool, Postgres};
-use std::env;
+use std::{collections::HashMap, env};
 //use actix_cors::Cors;
 
 
@@ -10,7 +10,7 @@ mod data;
 mod shop;
 mod insurance;
 mod repairs; // Assume all the previously implemented functions are in this module
-mod police
+mod police;
 
 // Define the structure of incoming requests
 #[derive(Debug, Serialize, Deserialize)]

@@ -2,6 +2,9 @@ use sqlx::{Error, Pool, Postgres};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use bcrypt::{hash, verify, DEFAULT_COST};
+use uuid::Uuid;
+
+use crate::data::{Claim, ClaimStatus, Contract, RepairOrder};
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,7 +16,6 @@ pub struct ContractTypeResult {
 
 //Add an index to the shop_type column for faster filtering:
 //:CREATE INDEX idx_contract_types_shop_type ON contract_types (shop_type);
-
 pub async fn list_contract_types(
     pool: &Pool<Postgres>,
     args: Option<String>, // Optional JSON string for filtering
@@ -64,7 +66,8 @@ pub async fn create_contract_type(
         Error::Decode(Box::new(err))
     })?;
 
-    let uuid: Uuid = partial
+    let uuid: Uuid = partial    //was let uuid: Uuid = partial
+
         .get("uuid")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
@@ -353,10 +356,24 @@ pub async fn file_claim(
         Error::Decode(Box::new(err))
     })?;
 
-    // Check if the contract exists
-    contract = claim.Contract(pool);
+    // Create the claim
+    let claim_id = dto.uuid;
+    let claim = Claim {
+        id: claim_id,
+        contract_uuid: dto.contract_uuid,
+        date: dto.date,
+        description: dto.description,
+        is_theft: dto.is_theft,
+        status: "New".to_string(), // ClaimStatusNew
+        //reimbursable: 0.0,
+        //repaired: false,
+        //file_reference: String::new(),
+    };
 
-    /*let contract = sqlx::query_as!(
+    // Check if the contract exists
+   let contract = claim.Contract(pool);
+
+   /* let contract = sqlx::query_as!(
         Contract,
         r#"
         SELECT id, username, claim_index
@@ -377,20 +394,6 @@ pub async fn file_claim(
                 "Contract could not be found.",
             ))));
         }
-    };
-
-    // Create the claim
-    let claim_id = dto.uuid;
-    let claim = Claim {
-        id: claim_id,
-        contract_uuid: dto.contract_uuid,
-        date: dto.date,
-        description: dto.description,
-        is_theft: dto.is_theft,
-        status: "New".to_string(), // ClaimStatusNew
-        //reimbursable: 0.0,
-        //repaired: false,
-        //file_reference: String::new(),
     };
 
     // Insert the claim into the database
@@ -512,12 +515,12 @@ pub async fn process_claim(
 
             //get the contract
             //let contract = fetch_contract(pool, claim.contract_uuid).await?;
-            contract = claim.Contract(pool);
+            let contract = claim.Contract(pool);
 
             let mut contract = match contract {
                 Some(c) => c,
                 None => {
-                    eprintln!("Contract with UUID {} not found.", dto.contract_uuid);
+                    eprintln!("Contract with UUID {} not found.", input.contract_uuid);
                     return Err(Error::Decode(Box::new(std::io::Error::new(
                         std::io::ErrorKind::NotFound,
                         "Contract could not be found.",
@@ -528,8 +531,8 @@ pub async fn process_claim(
             // Create a repair order
             let repair_order = RepairOrder {
                 claim_uuid: claim.id,
-                contract_uuid: claim.contract_uuid,
-                item: contract.item,
+                contract_id: claim.contract_uuid,
+                item_id: contract.item,
                 ready: false,
             };
 
@@ -724,23 +727,23 @@ pub async fn auth_magic(
     let user = sqlx::query_as!(
         User,
         r#"
-        SELECT username, password, first_name, last_name
-        FROM users
-        WHERE username = $1
+        SELECT EXISTS(
+            SELECT 1 FROM users WHERE username = $1
+        ) AS "exists!"
         "#,
         input.username
     )
     .fetch_optional(pool)
     .await?;
 
-    // Authenticate the user
-    let authenticated = match user {
+    // Authenticate the username
+    let username_authenticated = match user {
         Some(user) => verify(&input.username, &user.username).unwrap_or(false), 
         None => false,
     };
 
     // Serialize the result into JSON
-    serde_json::to_string(&authenticated).map_err(|err| {
+    serde_json::to_string(&username_authenticated).map_err(|err| {
         eprintln!("Failed to serialize authentication result: {:?}", err);
         Error::Decode(Box::new(err))
     })
@@ -758,7 +761,7 @@ pub async fn get_user(
     args: String, // JSON input as a string
 ) -> Result<Option<String>, Error> {
     // Parse input JSON
-    let input: GetUserDto = serde_json::from_str(&args).map_err(|err| {
+    let input: UserResponse = serde_json::from_str(&args).map_err(|err| {
         eprintln!("Failed to parse input JSON: {:?}", err);
         Error::Decode(Box::new(err))
     })?;
